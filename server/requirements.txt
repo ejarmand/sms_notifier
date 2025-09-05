@@ -1,0 +1,22 @@
+# SMS Notifier Server Dependencies
+
+# Web framework
+Flask>=2.0.0
+
+# WSGI server for production
+gunicorn>=20.1.0
+
+# SMS service
+twilio>=7.0.0
+
+# Cryptography for public key authentication
+cryptography>=3.4.0
+
+# HTTP client for health checks
+requests>=2.25.0
+
+# Development dependencies
+pytest>=6.0.0
+pytest-flask>=1.0.0
+black>=21.0.0
+flake8>=3.8.0

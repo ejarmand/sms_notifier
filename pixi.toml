@@ -1,0 +1,16 @@
+[workspace]
+authors = ["Ethan Armand <ejarmand@github.com>"]
+channels = ["conda-forge"]
+name = "sms_notifier"
+platforms = ["linux-64"]
+version = "0.1.0"
+
+[tasks]
+test = "pytest -q"
+gen-keys = "PYTHONPATH=client python -m sms_client.cli gen-keypair --private-out id_rsa --public-out id_rsa.pub"
+
+[dependencies]
+python = "3.11.*"
+pytest = ">=8.4.1,<9"
+cryptography = ">=42,<43"
+flask = ">=3.1.2,<4"
