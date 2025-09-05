@@ -23,7 +23,23 @@ a proxy connection to this api.
 
 ## Quick Start
 
-### Development Setup (No Configuration Required)
+### CLI installation
+if you just want to use/configure the cli to acces the endpoint:
+     ```bash
+     pip install git+https://github.com/ejarmand/sms_notifier.git#subdirectory=client
+     ```
+    alternately I prefer
+    ```bash
+    uv tool install 'git+https://github.com/ejarmand/sms_notifier.git#subdirectory=client'
+    ```
+    config
+    ```bash
+    smsn-client init --server-url http://external-server:5000 \
+    # optional config for using an ssh proxy \
+    --ssh-hostname bastion
+    ```
+
+### Development Setup (the dev setup is greedily optimized. e.g not good at all)
 
 **note: the dev_setup.py is a total mess, and I don't plan to update it**
 
@@ -78,7 +94,7 @@ python3 -m sms_client.cli init
 - **SMS Blueprint** (`/sms/*`): Sends SMS messages with built-in authentication
 - **Debug Server**: Mock implementation for development and testing
 
-### Client Components
+## Client Components
 
 - **CLI Interface**: Command-line client with init, send, and test commands
 - **API Client**: Python library for programmatic access

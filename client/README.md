@@ -65,7 +65,8 @@ smsn-client init \
 
 ## Configuration
 
-The client stores configuration in `~/.config/sms_notifier/config.json`:
+The client stores configuration in `XDG_CONFIG_HOME/sms_notifier/config.json` 
+and will store rsa key pairs there as well by default:
 
 ```json
 {
