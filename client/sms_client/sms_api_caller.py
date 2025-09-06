@@ -171,9 +171,12 @@ class SMSAPIConfig:
         # If SSH hostname is provided, load SSH config
         if self.ssh_hostname:
             self._load_ssh_config()
-        else:
-            # Try to auto-detect SSH proxy from server URL
+        elif self.ssh_proxy_host or self.ssh_proxy_jump:
+            # Only try to auto-detect if there's already some SSH proxy configuration
             self._auto_detect_ssh_proxy()
+        else:
+            # Check if server URL indicates we need SSH proxy (not localhost)
+            self._check_if_ssh_needed()
     
     def _load_ssh_config(self):
         """Load SSH configuration from ~/.ssh/config"""
@@ -209,6 +212,29 @@ class SMSAPIConfig:
         except Exception:
             # Ignore SSH config loading errors
             pass
+    
+    def _auto_detect_ssh_proxy(self):
+        """Auto-detect SSH proxy configuration from server URL"""
+        # This method is called when there's already some SSH proxy configuration
+        # For now, we'll leave SSH proxy configuration as-is
+        # This allows the client to work with existing SSH proxy settings
+        pass
+    
+    def _check_if_ssh_needed(self):
+        """Check if SSH proxy is needed based on server URL"""
+        import urllib.parse
+        
+        parsed = urllib.parse.urlparse(self.server_url)
+        host = parsed.hostname or 'localhost'
+        
+        # Only suggest SSH proxy for non-localhost servers
+        if host not in ['localhost', '127.0.0.1', '::1']:
+            if self.ssh_verbose:
+                print(f"DEBUG: Server URL {self.server_url} points to non-localhost ({host})")
+                print("DEBUG: Consider configuring SSH proxy if server is not directly accessible")
+        else:
+            if self.ssh_verbose:
+                print(f"DEBUG: Server URL {self.server_url} points to localhost, no SSH proxy needed")
 
 
 class SMSAPIClient:
