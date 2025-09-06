@@ -24,20 +24,26 @@ a proxy connection to this api.
 ## Quick Start
 
 ### CLI installation
-if you just want to use/configure the cli to acces the endpoint:
-     ```bash
-     pip install git+https://github.com/ejarmand/sms_notifier.git#subdirectory=client
-     ```
-    alternately I prefer
-    ```bash
-    uv tool install 'git+https://github.com/ejarmand/sms_notifier.git#subdirectory=client'
-    ```
-    config
-    ```bash
-    smsn-client init --server-url http://external-server:5000 \
-    # optional config for using an ssh proxy \
-    --ssh-hostname bastion
-    ```
+
+If you just want to use/configure the cli to access the endpoint:
+
+```bash
+pip install git+https://github.com/ejarmand/sms_notifier.git#subdirectory=client
+```
+
+Alternatively, I prefer:
+
+```bash
+uv tool install 'git+https://github.com/ejarmand/sms_notifier.git#subdirectory=client'
+```
+
+Configuration:
+
+```bash
+smsn-client init --server-url http://external-server:5000 \
+# optional config for using an ssh proxy \
+--ssh-hostname bastion
+```
 
 ### Development Setup (the dev setup is greedily optimized. e.g not good at all)
 
