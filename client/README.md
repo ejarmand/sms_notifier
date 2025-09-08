@@ -22,18 +22,25 @@ pip install -e .
 
 1. **Initialize the client**:
    ```bash
-   smsn-client init --server-url http://your-server:8080
+   sms-cli init --server-url http://your-server:8080
    ```
+
+    **note:** you will need to add your RSA public key to the server for verification 
 
 2. **Send an SMS**:
    ```bash
-   smsn-client send "Hello from the client!"
+   sms-cli send "Hello from the client!"
    ```
 
 3. **Test connection**:
    ```bash
-   smsn-client test
+   sms-cli test
    ```
+
+4. **Send job status updates**
+    ```bash
+    sms-cli stat --message-on fail bwa mem [...]
+    ```
 
 ### For External Servers (SSH Proxy)
 
@@ -41,14 +48,14 @@ If your SMS server is external and requires SSH tunneling, you have two options:
 
 **Option 1: Use SSH config hostname (recommended)**
 ```bash
-smsn-client init \
+sms-cli init \
   --server-url http://external-server:5000 \
   --ssh-hostname bastion
 ```
 
 **Option 2: Manual SSH proxy configuration**
 ```bash
-smsn-client init \
+sms-cli init \
   --server-url http://external-server:5000 \
   --ssh-proxy-host bastion.example.com \
   --ssh-proxy-user myuser \
@@ -57,7 +64,7 @@ smsn-client init \
 
 **With verbose SSH debugging:**
 ```bash
-smsn-client init \
+sms-cli init \
   --server-url http://external-server:5000 \
   --ssh-hostname bastion \
   --ssh-verbose
@@ -155,18 +162,19 @@ For troubleshooting SSH proxy issues, enable verbose debugging:
 
 **On command line:**
 ```bash
-smsn-client send "test message" --ssh-verbose
-smsn-client test --ssh-verbose
+sms-cli send "test message" --ssh-verbose
+sms-cli test --ssh-verbose
 ```
 
 This will show detailed SSH tunnel creation, connection status, and any errors.
 
 ## Commands
 
-- `smsn-client init` - Initialize client configuration and generate keys
-- `smsn-client send <message>` - Send an SMS message
-- `smsn-client test` - Test connection to the server
-- `smsn-client gen-keypair` - Generate RSA keypair
+- `sms-cli init` - Initialize client configuration and generate keys
+- `sms-cli send <message>` - Send an SMS message
+- `sms-cli test` - Test connection to the server
+- `sms-cli gen-keypair` - Generate RSA keypair
+- `sms-cli stat`
 
 ## Troubleshooting
 
@@ -186,7 +194,7 @@ If you're having trouble with SSH proxy connections:
 
 3. **Verify SSH proxy configuration**:
    ```bash
-   smsn-client test
+   sms-cli test
    ```
 
 4. **Common issues**:

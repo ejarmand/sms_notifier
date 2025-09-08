@@ -1,5 +1,5 @@
 [project]
-name = "smsn-client"
+name = "sms-cli"
 version = "0.1.0"
 description = "SMS notifier client utilities"
 authors = [
@@ -32,7 +32,7 @@ dev = [
 ]
 
 [project.scripts]
-smsn-client = "sms_client.cli:main"
+sms-cli = "sms_client.cli:main"
 
 [build-system]
 requires = ["hatchling"]

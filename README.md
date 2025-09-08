@@ -40,7 +40,7 @@ uv tool install 'git+https://github.com/ejarmand/sms_notifier.git#subdirectory=c
 Configuration:
 
 ```bash
-smsn-client init --server-url http://external-server:5000 \
+sms-cli init --server-url http://external-server:5000 \
 # optional config for using an ssh proxy \
 --ssh-hostname bastion
 ```

@@ -99,9 +99,7 @@ def cmd_stat(args: argparse.Namespace) -> int:
             config.ssh_verbose = True
         
         # Determine the command to execute
-        command = None
-        
-        command = args.REMAINDER
+        command = args.command
                 
         # Execute the command
         if args.verbose:
@@ -129,7 +127,7 @@ def cmd_stat(args: argparse.Namespace) -> int:
         
         # Determine success/failure and create message
         hostname = config.hostname
-        if exit_code == 0 and args.message_on in ['succes', 'both']:
+        if exit_code == 0 and args.message_on in ['success', 'both']:
             status = "completed successfully"
             message = f"Command '{command}' on {hostname} {status}"
         elif args.message_on in ['fail', 'both']:
@@ -273,7 +271,7 @@ def cmd_init(args: argparse.Namespace) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="smsn-client", description="SMS Notifier client utilities")
+    p = argparse.ArgumentParser(prog="sms-cli", description="SMS Notifier client utilities")
     sub = p.add_subparsers(dest="cmd", required=True)
 
     # Initialize everything command (main command)
@@ -323,13 +321,14 @@ def build_parser() -> argparse.ArgumentParser:
     # Stat command - execute command and send SMS notification
     p_stat = sub.add_parser("stat", help="Execute command and send SMS notification with exit status usage:"
                             "smsn_cli stat [args] command",
-                            description="Execute a command and send an SMS notification indicating whether the command completed successfully or failed with its exit code. Can be used with pipes: 'command | smsn-client stat'")
+                            description="Execute a command and send an SMS notification indicating whether"
+                            " the command completed successfully or failed with its exit code.")
     p_stat.add_argument("--to", help="Recipient phone number (overrides config)")
     p_stat.add_argument("--config", default=None, help="Config file path (default: auto-detect from config directory)")
-    p_stat.add_argument("--message-on", default="both", help="Sends message on 'succes', 'fail', or default: 'both'")
+    p_stat.add_argument("--message-on", default="both", help="Sends message on 'success', 'fail', or default: 'both'")
     p_stat.add_argument("--verbose", "-v", action="store_true", help="Verbose output (default: False)")
     p_stat.add_argument("--ssh-verbose", action="store_true", help="Enable verbose SSH proxy debugging output")
-    p_stat.add_argument("--timeout", type=int, default=None, help="Command timeout in seconds (default: None)")
+    p_stat.add_argument("command", nargs=argparse.REMAINDER, help="Command to execute")
     p_stat.set_defaults(func=cmd_stat)
 
     return p
