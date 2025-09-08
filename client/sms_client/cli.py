@@ -3,6 +3,7 @@ import os
 import sys
 import json
 import subprocess
+import shlex
 from typing import Tuple
 from cryptography.hazmat.primitives.asymmetric import rsa, padding
 from cryptography.hazmat.primitives import serialization, hashes
@@ -100,17 +101,8 @@ def cmd_stat(args: argparse.Namespace) -> int:
         # Determine the command to execute
         command = None
         
-        if args.command:
-            # Command provided as argument
-            command = args.command
-        elif not sys.stdin.isatty():
-            # Command provided via stdin (pipe)
-            command = sys.stdin.read().strip()
-        
-        if not command:
-            print("Error: No command provided. Use --command or pipe input.", file=sys.stderr)
-            return 1
-        
+        command = args.REMAINDER
+                
         # Execute the command
         if args.verbose:
             print(f"Executing command: {command}")
@@ -120,9 +112,6 @@ def cmd_stat(args: argparse.Namespace) -> int:
             result = subprocess.run(
                 command,
                 shell=True,
-                capture_output=True,
-                text=True,
-                timeout=args.timeout
             )
             exit_code = result.returncode
             
@@ -133,10 +122,6 @@ def cmd_stat(args: argparse.Namespace) -> int:
                 if result.stderr:
                     print(f"Command stderr: {result.stderr}")
             
-        except subprocess.TimeoutExpired:
-            exit_code = 124  # Standard timeout exit code
-            if args.verbose:
-                print(f"Command timed out after {args.timeout} seconds")
         except Exception as e:
             exit_code = 125  # Standard execution error exit code
             if args.verbose:
@@ -336,8 +321,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_test.set_defaults(func=cmd_test_connection)
 
     # Stat command - execute command and send SMS notification
-    p_stat = sub.add_parser("stat", help="Execute command and send SMS notification with exit status", description="Execute a command and send an SMS notification indicating whether the command completed successfully or failed with its exit code. Can be used with pipes: 'command | smsn-client stat'")
-    p_stat.add_argument("--command", "-c", help="Command to execute (alternative to piping)")
+    p_stat = sub.add_parser("stat", help="Execute command and send SMS notification with exit status usage:"
+                            "smsn_cli stat [args] command",
+                            description="Execute a command and send an SMS notification indicating whether the command completed successfully or failed with its exit code. Can be used with pipes: 'command | smsn-client stat'")
     p_stat.add_argument("--to", help="Recipient phone number (overrides config)")
     p_stat.add_argument("--config", default=None, help="Config file path (default: auto-detect from config directory)")
     p_stat.add_argument("--message-on", default="both", help="Sends message on 'succes', 'fail', or default: 'both'")
