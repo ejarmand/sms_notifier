@@ -31,7 +31,8 @@ If you just want to use/configure the cli to access the endpoint:
 pip install git+https://github.com/ejarmand/sms_notifier.git#subdirectory=client
 ```
 
-Alternatively, I prefer:
+Alternatively, I prefer uv tool install which provides
+a standalone cli binary in your PATH:
 
 ```bash
 uv tool install 'git+https://github.com/ejarmand/sms_notifier.git#subdirectory=client'
@@ -40,9 +41,10 @@ uv tool install 'git+https://github.com/ejarmand/sms_notifier.git#subdirectory=c
 Configuration:
 
 ```bash
-sms-cli init --server-url http://external-server:5000 \
-# optional config for using an ssh proxy \
---ssh-hostname bastion
+sms-cli init --server-url http://external-server:5000\
+    --to-number=+1012345678 # your phone number in E164 format \
+    --ssh-hostname bastion # optional config for using an ssh proxy
+
 ```
 
 ### Development Setup (the dev setup is greedily optimized. e.g not good at all)

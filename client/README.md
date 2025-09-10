@@ -6,8 +6,15 @@ A command-line client for the SMS Notifier service with public key authenticatio
 
 Install directly from GitHub:
 
+with pip
+
 ```bash
 pip install git+https://github.com/ejarmand/sms-notifier.git#subdirectory=client
+```
+Global cli install with uv
+
+```bash
+uv tool install 'git+https://github.com/ejarmand/sms_notifier.git#subdirectory=client'
 ```
 
 Or for development:
@@ -21,9 +28,11 @@ pip install -e .
 ## Quick Start
 
 1. **Initialize the client**:
-   ```bash
-   sms-cli init --server-url http://your-server:8080
-   ```
+    ```bash
+    sms-cli init --server-url http://external-server:5000\
+        --to-number=+1012345678 # your phone number in E164 format \
+        --ssh-hostname bastion # optional config for using an ssh proxy
+    ```
 
     **note:** you will need to add your RSA public key to the server for verification 
 
