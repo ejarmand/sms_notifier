@@ -89,7 +89,7 @@ def test_inbox_queries_twilio_after_timestamp_and_returns_only_inbound_messages(
         [
             SimpleNamespace(
                 sid="SM-inbound",
-                date_sent=datetime(2026, 9, 3, 12, 5, tzinfo=timezone.utc),
+                date_sent=datetime(2026, 9, 3, 19, 5, tzinfo=timezone.utc),
                 from_="+15557654321",
                 to="+15551234567",
                 body="log breakfast",
@@ -97,7 +97,7 @@ def test_inbox_queries_twilio_after_timestamp_and_returns_only_inbound_messages(
             ),
             SimpleNamespace(
                 sid="SM-outbound",
-                date_sent=datetime(2026, 9, 3, 12, 6, tzinfo=timezone.utc),
+                date_sent=datetime(2026, 9, 3, 19, 6, tzinfo=timezone.utc),
                 from_="+15551234567",
                 to="+15557654321",
                 body="ignored",
@@ -115,7 +115,7 @@ def test_inbox_queries_twilio_after_timestamp_and_returns_only_inbound_messages(
         response = client.post(
             "/sms/inbox",
             json=authenticated_payload(
-                client, private_key, after="2026-09-03T12:00:00Z"
+                client, private_key, after="2026-09-03T12:00:00-07:00"
             ),
         )
 
@@ -123,15 +123,16 @@ def test_inbox_queries_twilio_after_timestamp_and_returns_only_inbound_messages(
     assert response.get_json() == [
         {
             "sid": "SM-inbound",
-            "date_sent": "2026-09-03T12:05:00+00:00",
+            "date_sent": "2026-09-03T19:05:00+00:00",
             "from": "+15557654321",
             "body": "log breakfast",
         }
     ]
     assert messages.filters == {
-        "date_sent_after": datetime(2026, 9, 3, 12, 0, tzinfo=timezone.utc),
+        "date_sent_after": datetime(2026, 9, 3, 19, 0, tzinfo=timezone.utc),
         "to": "+15551234567",
     }
+    assert messages.filters["date_sent_after"].tzinfo is timezone.utc
 
 
 def test_inbox_rejects_an_after_timestamp_without_timezone(tmp_path, monkeypatch):

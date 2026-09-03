@@ -1,7 +1,7 @@
 import logging
 import os
 import threading
-from datetime import datetime
+from datetime import datetime, timezone
 
 from flask import Blueprint, jsonify, request
 from twilio.base.exceptions import TwilioException
@@ -50,7 +50,7 @@ def parse_after(value):
     parsed = datetime.fromisoformat(value)
     if parsed.tzinfo is None:
         raise ValueError
-    return parsed
+    return parsed.astimezone(timezone.utc)
 
 
 @sms_bp.post("/send")
