@@ -12,8 +12,8 @@ The Flask app keeps its authentication and SMS blueprints.
 - `GET /health` reports service health.
 - `POST /auth/challenge` accepts `{"hostname": "client-name"}`.
 - `POST /auth/verify` verifies `hostname`, `challenge`, and `signature`.
-- `POST /sms/send` accepts the authentication fields and `message`. It sends to
-  the configured `YOUR_PHONE_NUMBER`.
+- `POST /sms/send` accepts the authentication fields, `message`, and an optional
+  `to` override. Without `to`, it sends to the configured `YOUR_PHONE_NUMBER`.
 - `POST /sms/inbox` accepts the authentication fields and a timezone-aware
   ISO-8601 `after` value. It queries Twilio with `date_sent_after`, limits the
   query to messages addressed to `TWILIO_PHONE_NUMBER`, drops non-inbound

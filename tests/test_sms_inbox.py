@@ -28,6 +28,15 @@ class RecordingMessages:
         return self.messages
 
 
+class RecordingSends:
+    def __init__(self):
+        self.message = None
+
+    def create(self, **message):
+        self.message = message
+        return SimpleNamespace(sid="SM-explicit-recipient")
+
+
 def create_authenticated_app(tmp_path, monkeypatch):
     private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     public_key = private_key.public_key().public_bytes(
@@ -140,3 +149,33 @@ def test_inbox_rejects_an_after_timestamp_without_timezone(tmp_path, monkeypatch
     assert response.get_json() == {
         "error": "after must be an ISO-8601 timestamp with a timezone"
     }
+
+
+def test_send_retains_explicit_recipient_override(tmp_path, monkeypatch):
+    app, private_key = create_authenticated_app(tmp_path, monkeypatch)
+    monkeypatch.setenv("YOUR_PHONE_NUMBER", "+15550000000")
+    messages = RecordingSends()
+    monkeypatch.setattr(
+        sms_blueprint,
+        "get_twilio_client",
+        lambda: SimpleNamespace(messages=messages),
+    )
+
+    with app.test_client() as client:
+        response = client.post(
+            "/sms/send",
+            json=authenticated_payload(
+                client,
+                private_key,
+                message="legacy request",
+                to="+15559999999",
+            ),
+        )
+
+    assert response.status_code == 200
+    assert messages.message == {
+        "body": "legacy request",
+        "from_": "+15551234567",
+        "to": "+15559999999",
+    }
+    assert response.get_json()["to"] == "+15559999999"

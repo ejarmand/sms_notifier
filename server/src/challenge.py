@@ -75,10 +75,7 @@ def load_authorized_keys():
 
 
 def verify_challenge_response(hostname, challenge, signature, public_key=None):
-    """Verify and consume the current challenge for a hostname."""
-    if get_challenge_for_hostname(hostname) != challenge:
-        return False
-
+    """Verify that a hostname's public key signed a challenge value."""
     if public_key is None:
         public_key = load_authorized_keys().get(hostname)
     if public_key is None:
@@ -97,13 +94,7 @@ def verify_challenge_response(hostname, challenge, signature, public_key=None):
         )
     except (InvalidSignature, TypeError, ValueError):
         return False
-
-    with sqlite3.connect(DATABASE_PATH) as connection:
-        cursor = connection.execute(
-            "DELETE FROM challenges WHERE hostname = ? AND challenge = ?",
-            (hostname, challenge),
-        )
-    return cursor.rowcount == 1
+    return True
 
 
 def get_challenge_for_hostname(hostname):

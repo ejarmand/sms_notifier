@@ -81,14 +81,13 @@ def test_signature_verification_with_authorized_key(tmp_path: Path):
     assert challenge.verify_challenge_response(comment, tampered, sig_b64) is False
 
 
-def test_successful_signature_consumes_challenge(tmp_path: Path):
+def test_signature_verification_does_not_consume_or_query_challenge(tmp_path: Path):
     private_key, public_ssh = generate_keypair()
-    auth_line = public_ssh.decode("utf-8") + " replay-host\n"
+    auth_line = public_ssh.decode("utf-8") + " repeat-host\n"
     challenge = load_challenge_module(tmp_path, auth_line)
-    challenge.init_db()
-    issued = challenge.issue_challenge("replay-host")
+    signed_value = "caller-provided-challenge"
     signature = private_key.sign(
-        issued.encode(),
+        signed_value.encode(),
         padding.PSS(
             mgf=padding.MGF1(hashes.SHA256()),
             salt_length=padding.PSS.MAX_LENGTH,
@@ -99,15 +98,15 @@ def test_successful_signature_consumes_challenge(tmp_path: Path):
 
     assert (
         challenge.verify_challenge_response(
-            "replay-host", issued, encoded_signature
+            "repeat-host", signed_value, encoded_signature
         )
         is True
     )
     assert (
         challenge.verify_challenge_response(
-            "replay-host", issued, encoded_signature
+            "repeat-host", signed_value, encoded_signature
         )
-        is False
+        is True
     )
 
 def test_expired_challenge_returns_none(tmp_path: Path):

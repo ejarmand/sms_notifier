@@ -72,7 +72,7 @@ def send_sms():
     if len(message) > 1600:
         return jsonify({"error": "message too long (max 1600 characters)"}), 400
 
-    to_number = get_secret("YOUR_PHONE_NUMBER")
+    to_number = data["to"] if "to" in data else get_secret("YOUR_PHONE_NUMBER")
     twilio_number = get_secret("TWILIO_PHONE_NUMBER")
     if not to_number or not twilio_number:
         return jsonify({"error": "SMS phone numbers are not configured"}), 500

@@ -48,3 +48,14 @@ def test_secret_can_come_from_systemd_credentials(tmp_path, monkeypatch):
     monkeypatch.setenv("CREDENTIALS_DIRECTORY", str(tmp_path))
 
     assert get_secret("TWILIO_AUTH_TOKEN") == "token-from-systemd"
+
+
+def test_systemd_credential_takes_precedence_over_environment(
+    tmp_path, monkeypatch
+):
+    credential = tmp_path / "TWILIO_AUTH_TOKEN"
+    credential.write_text("token-from-systemd\n")
+    monkeypatch.setenv("TWILIO_AUTH_TOKEN", "token-from-environment")
+    monkeypatch.setenv("CREDENTIALS_DIRECTORY", str(tmp_path))
+
+    assert get_secret("TWILIO_AUTH_TOKEN") == "token-from-systemd"
