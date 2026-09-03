@@ -1,0 +1,30 @@
+[Unit]
+Description=SMS Notifier
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=sms-notifier
+Group=sms-notifier
+WorkingDirectory=/opt/sms-notifier/server
+EnvironmentFile=-/etc/sms-notifier/server.conf
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=SMSN_AUTHORIZED_KEYS_PATH=/etc/sms-notifier/authorized_keys
+Environment=SMSN_DATABASE_PATH=/var/lib/sms-notifier/challenges.db
+LoadCredential=TWILIO_ACCOUNT_SID:/etc/sms-notifier/credentials/TWILIO_ACCOUNT_SID
+LoadCredential=TWILIO_AUTH_TOKEN:/etc/sms-notifier/credentials/TWILIO_AUTH_TOKEN
+LoadCredential=TWILIO_PHONE_NUMBER:/etc/sms-notifier/credentials/TWILIO_PHONE_NUMBER
+LoadCredential=YOUR_PHONE_NUMBER:/etc/sms-notifier/credentials/YOUR_PHONE_NUMBER
+ExecStart=/opt/sms-notifier/.venv/bin/gunicorn --config /opt/sms-notifier/server/gunicorn.conf.py sms_notifier:create_app()
+Restart=on-failure
+StateDirectory=sms-notifier
+NoNewPrivileges=true
+PrivateDevices=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+
+[Install]
+WantedBy=multi-user.target

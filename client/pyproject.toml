@@ -1,38 +1,14 @@
 [project]
-name = "sms-cli"
-version = "0.1.0"
-description = "SMS notifier client utilities"
-authors = [
-    {name = "Ethan J Armand", email = "earmand@uscd.edu"},
-]
+name = "sms-notifier-client"
+version = "0.2.0"
+description = "Direct HTTP client for the SMS Notifier service"
 readme = "README.md"
-license = {file = "LICENSE"}
-classifiers = [
-    "Development Status :: 4 - Beta",
-    "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.8",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
-]
-requires-python = ">=3.8"
+license = "MIT"
+requires-python = ">=3.12,<3.13"
 dependencies = [
-    "cryptography>=3.4.0",
-    "requests>=2.25.0",
+    "cryptography>=46.0.0,<47",
+    "requests>=2.32.0,<3",
 ]
-
-[project.optional-dependencies]
-dev = [
-    "pytest>=6.0.0",
-    "black>=21.0.0",
-    "flake8>=3.8.0",
-]
-
-[project.scripts]
-sms-cli = "sms_client.cli:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -40,4 +16,3 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["sms_client"]
-

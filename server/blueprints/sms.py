@@ -1,179 +1,159 @@
-"""
-SMS Blueprint for SMS Notifier
-
-written with cursor agent
-
-This blueprint provides SMS sending functionality with built-in authentication.
-
-To register this blueprint in your Flask app:
-    from blueprints.sms import sms_bp
-    app.register_blueprint(sms_bp)
-
-Endpoints:
-    POST /sms/send - Send SMS message with challenge response authentication
-
-Usage Flow:
-    1. POST /auth/challenge with hostname to get challenge
-    2. Sign the challenge with your private key
-    3. POST /sms/send with message, hostname, challenge, and signature
-"""
-
+import logging
 import os
 import threading
-import logging
 from datetime import datetime
-from flask import Blueprint, request, jsonify
-from twilio.rest import Client
+
+from flask import Blueprint, jsonify, request
 from twilio.base.exceptions import TwilioException
-from src.challenge import load_authorized_keys, verify_challenge_response
+from twilio.rest import Client
 
-# Set up logger for this module
+from blueprints.auth import get_authorized_keys
+from src.challenge import verify_challenge_response
+from src.config import get_secret
+
+
 logger = logging.getLogger(__name__)
-
-# Create the SMS blueprint
-sms_bp = Blueprint('sms', __name__, url_prefix='/sms')
-
-# Thread-local storage for Twilio client and authorized keys
+sms_bp = Blueprint("sms", __name__, url_prefix="/sms")
 _local = threading.local()
 
+
 def get_twilio_client():
-    """Get Twilio client, creating it once per thread"""
-    if not hasattr(_local, 'twilio_client'):
-        # Check if we're in debug mode
-        debug_mode = os.environ.get("SMS_DEBUG_MODE", "false").lower() == "true"
-        
-        if debug_mode:
-            logger.debug("Debug mode: Using mock Twilio client")
-            _local.twilio_client = None  # Will be handled in send_sms
-        else:
-            logger.debug("Initializing Twilio client for thread")
-            account_sid = os.environ.get("TWILIO_ACCOUNT_SID")
-            auth_token = os.environ.get("TWILIO_AUTH_TOKEN")
-            _local.twilio_client = Client(account_sid, auth_token)
-            logger.info("Twilio client initialized successfully")
+    """Create one Twilio client per worker thread."""
+    if not hasattr(_local, "twilio_client"):
+        account_sid = get_secret("TWILIO_ACCOUNT_SID")
+        auth_token = get_secret("TWILIO_AUTH_TOKEN")
+        _local.twilio_client = Client(account_sid, auth_token)
     return _local.twilio_client
 
-def get_authorized_keys():
-    """Get authorized keys, loading them once per thread"""
-    if not hasattr(_local, 'authorized_keys'):
-        logger.debug("Loading authorized keys for SMS thread")
-        _local.authorized_keys = load_authorized_keys()
-        logger.info(f"Loaded {len(_local.authorized_keys)} authorized keys for SMS")
-    return _local.authorized_keys
 
 def verify_auth(data):
-    """Verify authentication using challenge response"""
-    if not all(key in data for key in ['hostname', 'challenge', 'signature']):
-        logger.warning("SMS request missing required authentication fields")
+    """Verify the challenge signature in an SMS endpoint payload."""
+    required = ("hostname", "challenge", "signature")
+    if not all(key in data for key in required):
         return None, "hostname, challenge, and signature are required"
-    
-    hostname = data['hostname']
-    challenge = data['challenge']
-    signature = data['signature']
-    
-    logger.debug(f"SMS authentication attempt for hostname '{hostname}'")
-    
-    # Get the specific public key for this hostname
-    authorized_keys = get_authorized_keys()
-    if hostname not in authorized_keys:
-        logger.warning(f"SMS request from unauthorized hostname '{hostname}'")
+
+    hostname = data["hostname"]
+    public_key = get_authorized_keys().get(hostname)
+    if public_key is None:
         return None, "Unauthorized client"
-    
-    public_key = authorized_keys[hostname]
-    
-    # Verify the challenge response
-    if not verify_challenge_response(hostname, challenge, signature, public_key):
-        logger.warning(f"SMS authentication failed for hostname '{hostname}' - invalid signature")
+
+    if not verify_challenge_response(
+        hostname, data["challenge"], data["signature"], public_key
+    ):
         return None, "Authentication failed"
-    
-    logger.info(f"SMS authentication successful for hostname '{hostname}'")
     return hostname, None
 
-@sms_bp.route("/send", methods=["POST"])
+
+def parse_after(value):
+    if not isinstance(value, str):
+        raise ValueError
+    parsed = datetime.fromisoformat(value)
+    if parsed.tzinfo is None:
+        raise ValueError
+    return parsed
+
+
+@sms_bp.post("/send")
 def send_sms():
-    """Send an SMS message with authentication"""
-    client_ip = request.remote_addr
-    try:
-        data = request.get_json()
-        if not data:
-            logger.warning(f"SMS request with no JSON data from {client_ip}")
-            return jsonify({"error": "JSON data required"}), 400
-        
-        # Verify authentication first
-        hostname, auth_error = verify_auth(data)
-        if auth_error:
-            logger.warning(f"SMS authentication failed from {client_ip}: {auth_error}")
-            return jsonify({"error": auth_error}), 401
-        
-        # Check for required message field
-        if 'message' not in data:
-            logger.warning(f"SMS request missing message field from {client_ip}")
-            return jsonify({"error": "message is required"}), 400
-        
-        message = data['message']
-        to_number = data.get('to', os.environ.get("YOUR_PHONE_NUMBER"))
-        
-        if not to_number:
-            logger.error(f"SMS request missing recipient phone number from {client_ip}")
-            return jsonify({"error": "recipient phone number required"}), 400
-        
-        # Validate message length
-        if len(message) > 1600:  # Twilio's limit
-            logger.warning(f"SMS message too long ({len(message)} chars) from {client_ip}")
-            return jsonify({"error": "message too long (max 1600 characters)"}), 400
-        
-        logger.info(f"SMS send request from hostname '{hostname}' to {to_number} from {client_ip}")
-        
-        # Check if we're in debug mode
-        debug_mode = os.environ.get("SMS_DEBUG_MODE", "false").lower() == "true"
-        
-        if debug_mode:
-            # Mock SMS sending in debug mode
-            mock_message_id = f"debug-{datetime.utcnow().timestamp()}"
-            mock_twilio_number = os.environ.get("TWILIO_PHONE_NUMBER", "+0987654321")
-            
-            logger.info(f"SMS sent successfully (DEBUG MODE) - ID: {mock_message_id}, from: {mock_twilio_number}, to: {to_number}, client: {hostname}")
-            logger.info(f"DEBUG: Message content: {message}")
-            
-            return jsonify({
+    """Send an SMS to the configured recipient."""
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({"error": "JSON data required"}), 400
+
+    hostname, auth_error = verify_auth(data)
+    if auth_error:
+        return jsonify({"error": auth_error}), 401
+    if "message" not in data:
+        return jsonify({"error": "message is required"}), 400
+
+    message = data["message"]
+    if not isinstance(message, str):
+        return jsonify({"error": "message must be a string"}), 400
+    if len(message) > 1600:
+        return jsonify({"error": "message too long (max 1600 characters)"}), 400
+
+    to_number = get_secret("YOUR_PHONE_NUMBER")
+    twilio_number = get_secret("TWILIO_PHONE_NUMBER")
+    if not to_number or not twilio_number:
+        return jsonify({"error": "SMS phone numbers are not configured"}), 500
+
+    if os.environ.get("SMS_DEBUG_MODE", "false").lower() == "true":
+        return jsonify(
+            {
                 "status": "success",
                 "message": "SMS sent successfully (debug mode)",
-                "message_id": mock_message_id,
-                "to": to_number,
-                "from": mock_twilio_number,
-                "client": hostname,
-                "debug": True
-            })
-        else:
-            # Real SMS sending
-            client = get_twilio_client()
-            twilio_number = os.environ.get("TWILIO_PHONE_NUMBER")
-            
-            if not twilio_number:
-                logger.error("Twilio phone number not configured")
-                return jsonify({"error": "Twilio phone number not configured"}), 500
-            
-            # Send the SMS
-            message_obj = client.messages.create(
-                body=message,
-                from_=twilio_number,
-                to=to_number
-            )
-            
-            logger.info(f"SMS sent successfully - ID: {message_obj.sid}, from: {twilio_number}, to: {to_number}, client: {hostname}")
-            
-            return jsonify({
-                "status": "success",
-                "message": "SMS sent successfully",
-                "message_id": message_obj.sid,
+                "message_id": f"debug-{datetime.now().timestamp()}",
                 "to": to_number,
                 "from": twilio_number,
-                "client": hostname
-            })
-        
-    except TwilioException as e:
-        logger.error(f"Twilio error sending SMS from {client_ip}: {str(e)}")
-        return jsonify({"error": f"Twilio error: {str(e)}"}), 500
-    except Exception as e:
-        logger.error(f"Unexpected error sending SMS from {client_ip}: {str(e)}", exc_info=True)
-        return jsonify({"error": "Internal server error"}), 500
+                "client": hostname,
+                "debug": True,
+            }
+        )
+
+    try:
+        sent = get_twilio_client().messages.create(
+            body=message,
+            from_=twilio_number,
+            to=to_number,
+        )
+    except TwilioException as error:
+        logger.error("Twilio error sending SMS: %s", error)
+        return jsonify({"error": f"Twilio error: {error}"}), 502
+
+    return jsonify(
+        {
+            "status": "success",
+            "message": "SMS sent successfully",
+            "message_id": sent.sid,
+            "to": to_number,
+            "from": twilio_number,
+            "client": hostname,
+        }
+    )
+
+
+@sms_bp.post("/inbox")
+def inbox():
+    """Return inbound Twilio messages sent after the requested timestamp."""
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({"error": "JSON data required"}), 400
+
+    _, auth_error = verify_auth(data)
+    if auth_error:
+        return jsonify({"error": auth_error}), 401
+
+    try:
+        after = parse_after(data.get("after"))
+    except (TypeError, ValueError):
+        return (
+            jsonify(
+                {"error": "after must be an ISO-8601 timestamp with a timezone"}
+            ),
+            400,
+        )
+
+    twilio_number = get_secret("TWILIO_PHONE_NUMBER")
+    if not twilio_number:
+        return jsonify({"error": "Twilio phone number is not configured"}), 500
+
+    try:
+        messages = get_twilio_client().messages.list(
+            date_sent_after=after,
+            to=twilio_number,
+        )
+    except TwilioException as error:
+        logger.error("Twilio error reading inbox: %s", error)
+        return jsonify({"error": f"Twilio error: {error}"}), 502
+
+    inbound = [
+        {
+            "sid": message.sid,
+            "date_sent": message.date_sent.isoformat(),
+            "from": message.from_,
+            "body": message.body,
+        }
+        for message in messages
+        if message.direction == "inbound" and message.to == twilio_number
+    ]
+    return jsonify(inbound)

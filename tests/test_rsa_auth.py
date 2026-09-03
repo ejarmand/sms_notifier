@@ -80,6 +80,36 @@ def test_signature_verification_with_authorized_key(tmp_path: Path):
     tampered = current + "-tamper"
     assert challenge.verify_challenge_response(comment, tampered, sig_b64) is False
 
+
+def test_successful_signature_consumes_challenge(tmp_path: Path):
+    private_key, public_ssh = generate_keypair()
+    auth_line = public_ssh.decode("utf-8") + " replay-host\n"
+    challenge = load_challenge_module(tmp_path, auth_line)
+    challenge.init_db()
+    issued = challenge.issue_challenge("replay-host")
+    signature = private_key.sign(
+        issued.encode(),
+        padding.PSS(
+            mgf=padding.MGF1(hashes.SHA256()),
+            salt_length=padding.PSS.MAX_LENGTH,
+        ),
+        hashes.SHA256(),
+    )
+    encoded_signature = base64.b64encode(signature).decode("ascii")
+
+    assert (
+        challenge.verify_challenge_response(
+            "replay-host", issued, encoded_signature
+        )
+        is True
+    )
+    assert (
+        challenge.verify_challenge_response(
+            "replay-host", issued, encoded_signature
+        )
+        is False
+    )
+
 def test_expired_challenge_returns_none(tmp_path: Path):
     # TTL 0 means immediately expired
     _, public_ssh = generate_keypair()
