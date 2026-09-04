@@ -31,6 +31,14 @@ def test_systemd_unit_loads_all_twilio_values_as_credentials():
     assert "EnvironmentFile=-/etc/sms-notifier/server.conf" in unit
 
 
+def test_systemd_unit_waits_for_tailscale_before_binding():
+    unit = (ROOT / "deploy" / "sms-notifier.service").read_text()
+
+    assert "After=network-online.target tailscaled.service" in unit
+    assert "Wants=network-online.target tailscaled.service" in unit
+    assert "RestartSec=5" in unit
+
+
 def test_install_uses_uv_managed_python_312():
     script = (ROOT / "deploy" / "install.sh").read_text()
 

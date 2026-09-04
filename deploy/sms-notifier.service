@@ -1,7 +1,7 @@
 [Unit]
 Description=SMS Notifier
-After=network-online.target
-Wants=network-online.target
+After=network-online.target tailscaled.service
+Wants=network-online.target tailscaled.service
 
 [Service]
 Type=simple
@@ -19,6 +19,7 @@ LoadCredential=TWILIO_PHONE_NUMBER:/etc/sms-notifier/credentials/TWILIO_PHONE_NU
 LoadCredential=YOUR_PHONE_NUMBER:/etc/sms-notifier/credentials/YOUR_PHONE_NUMBER
 ExecStart=/opt/sms-notifier/.venv/bin/gunicorn --config /opt/sms-notifier/server/gunicorn.conf.py sms_notifier:create_app()
 Restart=on-failure
+RestartSec=5
 StateDirectory=sms-notifier
 NoNewPrivileges=true
 PrivateDevices=true

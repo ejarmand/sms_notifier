@@ -60,7 +60,9 @@ whose comment is `life-tracker`.
 
 ## Debian 11 deployment
 
-The supplied unit targets Debian 11 with systemd 247. Install uv as a standalone
+The supplied unit targets Debian 11 with systemd 247. It orders after
+`tailscaled.service` so the tailnet address in `SMSN_BIND` exists before the
+bind, and retries a failed start every five seconds. Install uv as a standalone
 binary first. The installer never invokes Debian's Python or pip. uv installs
 Python 3.12 below `/opt/sms-notifier/python` and creates the service virtual
 environment at `/opt/sms-notifier/.venv`.
