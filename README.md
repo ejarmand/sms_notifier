@@ -106,7 +106,8 @@ key per line. Gunicorn binds directly to `SMSN_BIND` and runs one sync worker.
 
 ## Development
 
-The repository is an uv workspace pinned to Python 3.12:
+The repository is an uv workspace. The deployed node runs Python 3.12; the
+client installs on any Python 3.12 or newer:
 
 ```bash
 uv sync

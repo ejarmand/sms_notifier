@@ -4,7 +4,7 @@ version = "0.2.0"
 description = "Direct HTTP client for the SMS Notifier service"
 readme = "README.md"
 license = "MIT"
-requires-python = ">=3.12,<3.13"
+requires-python = ">=3.12"
 dependencies = [
     "cryptography>=46.0.0,<47",
     "requests>=2.32.0,<3",

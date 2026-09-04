@@ -3,7 +3,7 @@ name = "sms-notifier-server"
 version = "0.2.0"
 description = "Authenticated Twilio send and inbox service"
 license = "MIT"
-requires-python = ">=3.12,<3.13"
+requires-python = ">=3.12"
 dependencies = [
     "cryptography>=46.0.0,<47",
     "flask>=3.1.0,<4",
