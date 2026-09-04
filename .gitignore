@@ -1,10 +1,10 @@
 
-# pixi environments
-.pixi
 *.egg-info
+.venv
+**/.venv
 
 # pycache
-__pychache__
+__pycache__
 **/*.pyc
 
 # logs
@@ -13,15 +13,8 @@ dev_logs
 **/*.err
 **/*.out
 
-# constructed dev configs
-client/dev_config
-start_server.sh
-test_client.sh
-**/data
-
 # configs
 **/.env
 id_rsa
 id_rsa.pub
 server/authorized_keys
-twilio_env

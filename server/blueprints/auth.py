@@ -20,9 +20,8 @@ import logging
 import os
 from datetime import datetime
 from src.challenge import (
-    init_db, issue_challenge, verify_challenge_response, 
-    get_challenge_for_hostname, clean_expired_challenges,
-    load_authorized_keys
+    init_db, issue_challenge, verify_issued_challenge,
+    clean_expired_challenges, load_authorized_keys
 )
 
 # Set up logger for this module
@@ -131,14 +130,14 @@ def verify_challenge():
         
         public_key = authorized_keys[hostname]
         
-        # Verify the challenge response with the specific public key
-        if verify_challenge_response(hostname, challenge, signature, public_key):
+        # Verify against the challenge issued to this hostname and consume it
+        if verify_issued_challenge(hostname, challenge, signature, public_key):
             logger.info(f"Authentication successful for hostname '{hostname}' from {client_ip}")
             # Clean up expired challenges periodically
             clean_expired_challenges()
             return jsonify({"status": "success", "message": "Authentication successful"})
         else:
-            logger.warning(f"Authentication failed for hostname '{hostname}' from {client_ip} - invalid signature")
+            logger.warning(f"Authentication failed for hostname '{hostname}' from {client_ip} - invalid signature or challenge")
             return jsonify({"error": "Authentication failed"}), 401
             
     except Exception as e:

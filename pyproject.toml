@@ -1,18 +1,21 @@
 [project]
-name = "sms-notifier-dev-setup"
-version = "0.1.0"
-description = "Development setup for SMS Notifier"
-requires-python = ">=3.8"
+name = "sms-notifier-workspace"
+version = "0.2.0"
+requires-python = ">=3.12"
 dependencies = [
-    "cryptography>=3.4.0",
+    "sms-notifier-client",
+    "sms-notifier-server",
 ]
 
-[project.scripts]
-dev-setup = "dev_setup:main"
+[dependency-groups]
+dev = ["pytest>=8.4.0,<9"]
 
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+[tool.uv.sources]
+sms-notifier-client = { workspace = true }
+sms-notifier-server = { workspace = true }
 
-[tool.hatch.build.targets.wheel]
-packages = ["."]
+[tool.uv.workspace]
+members = ["client", "server"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
