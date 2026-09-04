@@ -19,6 +19,11 @@ The Flask app keeps its authentication and SMS blueprints.
   query to messages addressed to `TWILIO_PHONE_NUMBER`, drops non-inbound
   results, and returns objects with `sid`, `date_sent`, `from`, and `body`.
 
+Every authenticated request must present the challenge most recently issued to
+its hostname. A challenge is consumed on successful verification and expires
+after `SMSN_CHALLENGE_TTL_SECONDS` (default 60), so a captured request cannot
+be replayed.
+
 The inbox endpoint queries Twilio on every request. It does not store messages
 or polling cursors.
 

@@ -112,6 +112,34 @@ def get_challenge_for_hostname(hostname):
     return challenge
 
 
+def consume_challenge(hostname, challenge):
+    """Delete the live challenge issued to hostname if it matches.
+
+    Returns True when a matching, unexpired challenge was deleted. The delete
+    is a single statement so a challenge can be consumed at most once.
+    """
+    with sqlite3.connect(DATABASE_PATH) as connection:
+        cursor = connection.execute(
+            """DELETE FROM challenges
+               WHERE hostname = ? AND challenge = ? AND expire_time > ?""",
+            (hostname, challenge, datetime.now().isoformat()),
+        )
+    return cursor.rowcount == 1
+
+
+def verify_issued_challenge(hostname, challenge, signature, public_key=None):
+    """Verify a signature over the challenge issued to hostname, then consume it.
+
+    Fails when the signature is invalid, the challenge was never issued to this
+    hostname, it has expired, or it has already been used.
+    """
+    if not isinstance(challenge, str):
+        return False
+    if not verify_challenge_response(hostname, challenge, signature, public_key):
+        return False
+    return consume_challenge(hostname, challenge)
+
+
 def clean_expired_challenges():
     with sqlite3.connect(DATABASE_PATH) as connection:
         connection.execute(

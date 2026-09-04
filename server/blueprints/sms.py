@@ -8,7 +8,7 @@ from twilio.base.exceptions import TwilioException
 from twilio.rest import Client
 
 from blueprints.auth import get_authorized_keys
-from src.challenge import verify_challenge_response
+from src.challenge import verify_issued_challenge
 from src.config import get_secret
 
 
@@ -27,7 +27,7 @@ def get_twilio_client():
 
 
 def verify_auth(data):
-    """Verify the challenge signature in an SMS endpoint payload."""
+    """Verify and consume the issued challenge in an SMS endpoint payload."""
     required = ("hostname", "challenge", "signature")
     if not all(key in data for key in required):
         return None, "hostname, challenge, and signature are required"
@@ -37,7 +37,7 @@ def verify_auth(data):
     if public_key is None:
         return None, "Unauthorized client"
 
-    if not verify_challenge_response(
+    if not verify_issued_challenge(
         hostname, data["challenge"], data["signature"], public_key
     ):
         return None, "Authentication failed"

@@ -81,33 +81,75 @@ def test_signature_verification_with_authorized_key(tmp_path: Path):
     assert challenge.verify_challenge_response(comment, tampered, sig_b64) is False
 
 
-def test_signature_verification_does_not_consume_or_query_challenge(tmp_path: Path):
-    private_key, public_ssh = generate_keypair()
-    auth_line = public_ssh.decode("utf-8") + " repeat-host\n"
-    challenge = load_challenge_module(tmp_path, auth_line)
-    signed_value = "caller-provided-challenge"
+def sign(private_key, value: str) -> str:
     signature = private_key.sign(
-        signed_value.encode(),
+        value.encode(),
         padding.PSS(
             mgf=padding.MGF1(hashes.SHA256()),
             salt_length=padding.PSS.MAX_LENGTH,
         ),
         hashes.SHA256(),
     )
-    encoded_signature = base64.b64encode(signature).decode("ascii")
+    return base64.b64encode(signature).decode("ascii")
 
-    assert (
-        challenge.verify_challenge_response(
-            "repeat-host", signed_value, encoded_signature
-        )
-        is True
-    )
-    assert (
-        challenge.verify_challenge_response(
-            "repeat-host", signed_value, encoded_signature
-        )
-        is True
-    )
+
+def test_issued_challenge_is_single_use(tmp_path: Path):
+    private_key, public_ssh = generate_keypair()
+    auth_line = public_ssh.decode("utf-8") + " repeat-host\n"
+    challenge = load_challenge_module(tmp_path, auth_line)
+    challenge.init_db()
+
+    issued = challenge.issue_challenge("repeat-host")
+    signature = sign(private_key, issued)
+
+    assert challenge.verify_issued_challenge("repeat-host", issued, signature) is True
+    # Replaying the same signed challenge fails once it has been consumed
+    assert challenge.verify_issued_challenge("repeat-host", issued, signature) is False
+    assert challenge.get_challenge_for_hostname("repeat-host") is None
+
+
+def test_challenge_not_issued_by_server_is_rejected(tmp_path: Path):
+    private_key, public_ssh = generate_keypair()
+    auth_line = public_ssh.decode("utf-8") + " forged-host\n"
+    challenge = load_challenge_module(tmp_path, auth_line)
+    challenge.init_db()
+
+    issued = challenge.issue_challenge("forged-host")
+    forged = "caller-provided-challenge"
+    assert challenge.verify_issued_challenge(
+        "forged-host", forged, sign(private_key, forged)
+    ) is False
+    # A bad attempt must not burn the legitimately issued challenge
+    assert challenge.get_challenge_for_hostname("forged-host") == issued
+
+
+def test_bad_signature_does_not_consume_challenge(tmp_path: Path):
+    private_key, public_ssh = generate_keypair()
+    auth_line = public_ssh.decode("utf-8") + " sig-host\n"
+    challenge = load_challenge_module(tmp_path, auth_line)
+    challenge.init_db()
+
+    issued = challenge.issue_challenge("sig-host")
+    wrong_key, _ = generate_keypair()
+    assert challenge.verify_issued_challenge(
+        "sig-host", issued, sign(wrong_key, issued)
+    ) is False
+    assert challenge.verify_issued_challenge(
+        "sig-host", issued, sign(private_key, issued)
+    ) is True
+
+
+def test_expired_issued_challenge_is_rejected(tmp_path: Path):
+    private_key, public_ssh = generate_keypair()
+    auth_line = public_ssh.decode("utf-8") + " stale-host\n"
+    challenge = load_challenge_module(tmp_path, auth_line, ttl_seconds=0)
+    challenge.init_db()
+
+    issued = challenge.issue_challenge("stale-host")
+    assert challenge.verify_issued_challenge(
+        "stale-host", issued, sign(private_key, issued)
+    ) is False
+
 
 def test_expired_challenge_returns_none(tmp_path: Path):
     # TTL 0 means immediately expired

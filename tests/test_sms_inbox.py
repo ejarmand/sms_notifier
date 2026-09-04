@@ -180,3 +180,63 @@ def test_send_retains_explicit_recipient_override(tmp_path, monkeypatch):
         "to": "+15559999999",
     }
     assert response.get_json()["to"] == "+15559999999"
+
+
+def test_inbox_rejects_a_replayed_request(tmp_path, monkeypatch):
+    app, private_key = create_authenticated_app(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        sms_blueprint,
+        "get_twilio_client",
+        lambda: SimpleNamespace(messages=RecordingMessages([])),
+    )
+
+    with app.test_client() as client:
+        payload = authenticated_payload(
+            client, private_key, after="2026-09-03T12:00:00-07:00"
+        )
+        first = client.post("/sms/inbox", json=payload)
+        replay = client.post("/sms/inbox", json=payload)
+
+    assert first.status_code == 200
+    assert replay.status_code == 401
+    assert replay.get_json() == {"error": "Authentication failed"}
+
+
+def test_inbox_rejects_a_challenge_the_server_did_not_issue(
+    tmp_path, monkeypatch
+):
+    app, private_key = create_authenticated_app(tmp_path, monkeypatch)
+    forged = "not-issued-by-server"
+    signature = private_key.sign(
+        forged.encode(),
+        padding.PSS(
+            mgf=padding.MGF1(hashes.SHA256()),
+            salt_length=padding.PSS.MAX_LENGTH,
+        ),
+        hashes.SHA256(),
+    )
+
+    with app.test_client() as client:
+        response = client.post(
+            "/sms/inbox",
+            json={
+                "hostname": "test-host",
+                "challenge": forged,
+                "signature": base64.b64encode(signature).decode(),
+                "after": "2026-09-03T12:00:00-07:00",
+            },
+        )
+
+    assert response.status_code == 401
+
+
+def test_auth_verify_consumes_the_challenge(tmp_path, monkeypatch):
+    app, private_key = create_authenticated_app(tmp_path, monkeypatch)
+
+    with app.test_client() as client:
+        payload = authenticated_payload(client, private_key)
+        first = client.post("/auth/verify", json=payload)
+        replay = client.post("/auth/verify", json=payload)
+
+    assert first.status_code == 200
+    assert replay.status_code == 401
