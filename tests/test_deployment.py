@@ -1,6 +1,7 @@
 import runpy
 import sys
 from pathlib import Path
+import pytest
 
 ROOT = Path(__file__).parents[1]
 sys.path.insert(0, str(ROOT / "server"))
@@ -16,6 +17,13 @@ def test_gunicorn_uses_configured_bind_and_one_sync_worker(monkeypatch):
     assert config["bind"] == "100.64.10.20:8080"
     assert config["workers"] == 1
     assert config["worker_class"] == "sync"
+
+
+@pytest.mark.parametrize("bind", ["0.0.0.0:5000", "203.0.113.10:5000", "[::]:5000", "100.64.10.20:0"])
+def test_gunicorn_rejects_nonprivate_or_invalid_bind(monkeypatch, bind):
+    monkeypatch.setenv("SMSN_BIND", bind)
+    with pytest.raises(ValueError):
+        runpy.run_path(str(ROOT / "server" / "gunicorn.conf.py"))
 
 
 def test_systemd_unit_loads_all_twilio_values_as_credentials():

@@ -1,31 +1,34 @@
 # SMS Notifier client
 
-The client connects directly to an SMS Notifier server. It does not create SSH
-tunnels or configure proxies.
+Direct HTTP client for the tailnet-only SMS service, Python 3.12 or newer.
+Tailscale policy controls access; no application keys or SSH tunnels are needed.
 
 ```python
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from sms_client import SMSClient
 
-client = SMSClient(
-    "http://sms-host.tailnet:5000",
-    hostname="life-tracker",
-    private_key_path="~/.config/sms_notifier/id_rsa",
-)
-
-client.send("training complete")
-messages = client.inbox(datetime.now(timezone.utc))
+with SMSClient("http://100.64.10.20:5000") as client:
+    client.send("Check in")
+    replies = client.inbox(datetime.now(timezone.utc) - timedelta(minutes=15))
 ```
 
-Each request obtains and signs a fresh RSA challenge. `inbox(after)` accepts an
-ISO-8601 string or a timezone-aware `datetime`. An `SMSClient` instance returns
-each Twilio SID only once. Create a new instance to reset its in-memory SID set.
+`send(message)` returns a dictionary with `status` and `message_id`.
+`inbox(after)` takes an aware
+`datetime` and returns `sid`, `date_sent`, `from`, and `body` for personal replies.
+HTTP errors raise `requests.HTTPError`; requests time out after 30 seconds by
+default. Pass `timeout=` to change that. HTTP proxy environment variables are
+ignored so requests go directly to the private endpoint.
 
-Install the package with uv:
+SIDs are deduplicated in memory per client instance. The caller owns durable
+cursor/SID storage and should poll with an overlapping time window. Avoid
+blindly retrying sends after timeouts because delivery may already have started.
+
+Install from a checkout with `uv add ./client`, or from a pinned commit:
 
 ```bash
-uv add 'sms-notifier-client @ git+https://github.com/ejarmand/sms_notifier.git#subdirectory=client'
+uv add 'sms-notifier-client @ git+https://github.com/ejarmand/sms_notifier.git@COMMIT#subdirectory=client'
 ```
 
-The pre-tailnet client remains in `client_legacy/` for HPC installations that
-still need SSH tunneling.
+Version 0.3 requires the service without RSA auth. The old HPC CLI in
+`client_legacy/` still targets the previous deployment. External access to this
+service is tracked in [issue #3](https://github.com/ejarmand/sms_notifier/issues/3).
