@@ -1,130 +1,86 @@
 # SMS Notifier
 
-SMS Notifier is a small Flask service for sending and reading SMS through
-Twilio. Clients authenticate each request by signing a short-lived RSA
-challenge. The server is meant to listen on a tailnet address and does not need
-nginx, Docker, or a public listener.
+A private HTTP service for life_tracker to send SMS through Twilio and read
+replies. Access is controlled by Tailscale network policy. There are no
+application keys, auth endpoints, challenge database, or public HTTP listener.
 
 ## API
 
-The Flask app keeps its authentication and SMS blueprints.
+| Request | Result |
+| --- | --- |
+| `GET /health` | `{"status": "healthy"}`; does not contact Twilio |
+| `POST /sms/send` with `{"message": "Check in"}` | `{"status": "success", "message_id": "SM..."}` |
+| `POST /sms/inbox` with `{"after": "2026-09-05T12:00:00Z"}` | `[{"sid": "SM...", "date_sent": "...", "from": "+1...", "body": "..."}]` |
 
-- `GET /health` reports service health.
-- `POST /auth/challenge` accepts `{"hostname": "client-name"}`.
-- `POST /auth/verify` verifies `hostname`, `challenge`, and `signature`.
-- `POST /sms/send` accepts the authentication fields, `message`, and an optional
-  `to` override. Without `to`, it sends to the configured `YOUR_PHONE_NUMBER`.
-- `POST /sms/inbox` accepts the authentication fields and a timezone-aware
-  ISO-8601 `after` value. It queries Twilio with `date_sent_after`, limits the
-  query to messages addressed to `TWILIO_PHONE_NUMBER`, drops non-inbound
-  results, and returns objects with `sid`, `date_sent`, `from`, and `body`.
+Send always targets `YOUR_PHONE_NUMBER` from `TWILIO_PHONE_NUMBER`. Messages
+must contain 1–1600 characters and cannot be whitespace-only. Inbox returns
+inbound messages from `YOUR_PHONE_NUMBER` to `TWILIO_PHONE_NUMBER`. Its cursor
+must include a timezone; it is normalized to UTC before querying Twilio.
+Twilio's SDK list call follows pagination. The server keeps no message state.
 
-Every authenticated request must present the challenge most recently issued to
-its hostname. A challenge is consumed on successful verification and expires
-after `SMSN_CHALLENGE_TTL_SECONDS` (default 60), so a captured request cannot
-be replayed.
-
-The inbox endpoint queries Twilio on every request. It does not store messages
-or polling cursors.
+Unknown request fields, including old auth fields and recipient overrides,
+return 400. Provider HTTP or connection failures return 502. Do not blindly
+retry an unsuccessful send: a timeout can occur after Twilio accepted it.
 
 ## Client
 
-The package in `client/` makes direct HTTP requests and has two public methods:
-
 ```python
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from sms_client import SMSClient
 
-with SMSClient(
-    "http://100.64.10.20:5000",
-    hostname="life-tracker",
-    private_key_path="/home/me/.config/sms_notifier/id_rsa",
-) as client:
-    client.send("training complete")
-    messages = client.inbox(datetime.now(timezone.utc))
+with SMSClient("http://100.64.10.20:5000") as client:
+    client.send("What are you working on?")
+    replies = client.inbox(datetime.now(timezone.utc) - timedelta(minutes=15))
 ```
 
-Each client instance suppresses Twilio SIDs it has already returned. The set is
-kept in memory, so a new client instance starts with an empty set. The old CLI
-and its SSH tunnel support remain in `client_legacy/` for HPC use.
+The client requires Python 3.12 or newer and requests. It connects directly,
+ignoring HTTP proxy environment variables. Inbox accepts an aware `datetime`
+and deduplicates SIDs for the life of the client instance. The caller must
+persist its cursor and recent SIDs across restarts and use an overlapping
+polling window. The server does not associate replies with particular prompts.
 
-Install the new package from a checkout with:
+## Deploy on Debian 11
 
-```bash
-uv add ./client
-```
+Use the [life_tracker deployment guide](https://github.com/ejarmand/life_tracker/blob/main/docs/sms-deployment.md)
+for the setup helper, Tailscale policy, and send/reply checks.
 
-The server identifies a client by the comment at the end of its OpenSSH public
-key line. For the example above, `/etc/sms-notifier/authorized_keys` needs a line
-whose comment is `life-tracker`.
+Before starting the service:
 
-## Debian 11 deployment
+1. Join the node to your tailnet. Grant TCP port 5000 only to intended callers;
+   remove any broader allow rules that would also grant access. Any process on
+   an allowed device can call this API. Do not publicly proxy the HTTP port.
+2. Install standalone uv in a system path. The installer uses uv-managed
+   Python 3.12 under `/opt/sms-notifier/python`, leaving system Python alone.
+3. Put `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE_NUMBER`, and
+   `YOUR_PHONE_NUMBER` in separate root-owned 0600 files under
+   `/etc/sms-notifier/credentials`, a root-owned 0700 directory.
+4. Set `SMSN_BIND=100.x.y.z:5000` in `/etc/sms-notifier/server.conf`, using the
+   node's actual Tailscale IPv4 address. The default is loopback. Gunicorn
+   rejects wildcard and public bind addresses.
+5. Run `sudo ./deploy/install.sh`. It installs and restarts a single sync
+   gunicorn worker under systemd, with `LoadCredential=` for secrets. Logs go
+   to the journal. The service needs no writable state directory.
 
-The supplied unit targets Debian 11 with systemd 247. It orders after
-`tailscaled.service` so the tailnet address in `SMSN_BIND` exists before the
-bind, and retries a failed start every five seconds. Install uv as a standalone
-binary first. The installer never invokes Debian's Python or pip. uv installs
-Python 3.12 below `/opt/sms-notifier/python` and creates the service virtual
-environment at `/opt/sms-notifier/.venv`.
+## Migration from 0.2
 
-Create these four root-readable files before installation:
+Version 0.3 removes RSA authentication. Old clients are incompatible with the
+new service. The code in `client_legacy/` remains available for the old server;
+keep that deployment running for HPC callers during migration.
 
-```text
-/etc/sms-notifier/credentials/TWILIO_ACCOUNT_SID
-/etc/sms-notifier/credentials/TWILIO_AUTH_TOKEN
-/etc/sms-notifier/credentials/TWILIO_PHONE_NUMBER
-/etc/sms-notifier/credentials/YOUR_PHONE_NUMBER
-```
-
-Each file contains only its value and an optional final newline. The systemd
-unit uses `LoadCredential=` for all four files. The Flask process reads the
-private copies exposed through `CREDENTIALS_DIRECTORY`; the values do not
-appear in the unit's environment.
-
-Run the installer from the repository root:
-
-```bash
-sudo ./deploy/install.sh
-```
-
-The first installation creates `/etc/sms-notifier/server.conf` with a loopback
-default. Change `SMSN_BIND` to the server's tailnet address, then restart the
-service:
-
-```text
-SMSN_BIND=100.64.10.20:5000
-LOG_LEVEL=INFO
-```
-
-```bash
-sudo systemctl restart sms-notifier
-sudo systemctl status sms-notifier
-```
-
-Add client public keys to `/etc/sms-notifier/authorized_keys`, one OpenSSH RSA
-key per line. Gunicorn binds directly to `SMSN_BIND` and runs one sync worker.
+External access will be handled separately in [issue #3](https://github.com/ejarmand/sms_notifier/issues/3).
+Old `/etc/sms-notifier/authorized_keys` and `/var/lib/sms-notifier/challenges.db`
+are no longer used. Installation leaves those files in place for rollback.
 
 ## Development
-
-The repository is an uv workspace. The deployed node runs Python 3.12; the
-client installs on any Python 3.12 or newer:
 
 ```bash
 uv sync
 uv run pytest
 ```
 
-For a local debug server, set temporary environment values and run Flask from
-the server package:
-
-```bash
-SMS_DEBUG_MODE=true \
-TWILIO_PHONE_NUMBER=+15551234567 \
-YOUR_PHONE_NUMBER=+15557654321 \
-SMSN_AUTHORIZED_KEYS_PATH=./authorized_keys \
-SMSN_DATABASE_PATH=./challenges.db \
-uv run --directory server flask --app sms_notifier:create_app run
-```
+Tests exercise real client-to-server HTTP with Twilio mocked, request validation,
+provider failures, credential loading, and deployment bind restrictions. They do
+not send real SMS. There is no fake-success mode in the deployed service.
 
 ## License
 
