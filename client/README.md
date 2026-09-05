@@ -12,7 +12,8 @@ with SMSClient("http://100.64.10.20:5000") as client:
     replies = client.inbox(datetime.now(timezone.utc) - timedelta(minutes=15))
 ```
 
-`send(message)` returns the provider message ID. `inbox(after)` takes an aware
+`send(message)` returns a dictionary with `status` and `message_id`.
+`inbox(after)` takes an aware
 `datetime` and returns `sid`, `date_sent`, `from`, and `body` for personal replies.
 HTTP errors raise `requests.HTTPError`; requests time out after 30 seconds by
 default. Pass `timeout=` to change that. HTTP proxy environment variables are

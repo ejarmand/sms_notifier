@@ -2,6 +2,7 @@
 
 import logging
 import os
+import re
 from datetime import datetime, timezone
 
 from flask import Flask, jsonify, request
@@ -15,6 +16,7 @@ from src.config import get_secret
 
 def create_app():
     logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO").upper())
+    logging.getLogger("twilio.http_client").setLevel(logging.WARNING)
     credentials: dict[str, str] = {}
     for name in (
         "TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN",
@@ -24,6 +26,9 @@ def create_app():
         if not value:
             raise ValueError(f"Missing credential: {name}")
         credentials[name] = value
+    for name in ("TWILIO_PHONE_NUMBER", "YOUR_PHONE_NUMBER"):
+        if not re.fullmatch(r"\+[1-9][0-9]{1,14}", credentials[name]):
+            raise ValueError(f"{name} must use E.164 format: +countrycode and digits only")
     twilio = Client(
         credentials["TWILIO_ACCOUNT_SID"], credentials["TWILIO_AUTH_TOKEN"],
         http_client=TwilioHttpClient(timeout=10),
@@ -36,7 +41,10 @@ def create_app():
     @app.errorhandler(TwilioException)
     @app.errorhandler(RequestException)
     def provider_error(error):
-        app.logger.error("SMS provider request failed: %s", type(error).__name__)
+        app.logger.error(
+            "SMS provider request failed: %s status=%s code=%s",
+            type(error).__name__, getattr(error, "status", None), getattr(error, "code", None),
+        )
         return jsonify({"error": "SMS provider unavailable"}), 502
 
     @app.get("/health")

@@ -21,6 +21,9 @@ Twilio's SDK list call follows pagination. The server keeps no message state.
 Unknown request fields, including old auth fields and recipient overrides,
 return 400. Provider HTTP or connection failures return 502. Do not blindly
 retry an unsuccessful send: a timeout can occur after Twilio accepted it.
+Provider failures log the exception type and available HTTP status/Twilio code,
+without provider error text. Twilio SDK INFO request logging is suppressed to
+keep phone-number query parameters out of the journal.
 
 ## Client
 
@@ -54,6 +57,9 @@ Before starting the service:
 3. Put `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE_NUMBER`, and
    `YOUR_PHONE_NUMBER` in separate root-owned 0600 files under
    `/etc/sms-notifier/credentials`, a root-owned 0700 directory.
+   Both phone numbers must use E.164 format: `+` followed by country code and
+   digits, without spaces or punctuation. Startup rejects malformed values;
+   format validation does not verify that a number is assigned or reachable.
 4. Set `SMSN_BIND=100.x.y.z:5000` in `/etc/sms-notifier/server.conf`, using the
    node's actual Tailscale IPv4 address. The default is loopback. Gunicorn
    rejects wildcard and public bind addresses.
@@ -66,6 +72,8 @@ Before starting the service:
 Version 0.3 removes RSA authentication. Old clients are incompatible with the
 new service. The code in `client_legacy/` remains available for the old server;
 keep that deployment running for HPC callers during migration.
+Installing over an existing 0.2 systemd service replaces it in place; retain
+the old HPC deployment separately during cutover.
 
 External access will be handled separately in [issue #3](https://github.com/ejarmand/sms_notifier/issues/3).
 Old `/etc/sms-notifier/authorized_keys` and `/var/lib/sms-notifier/challenges.db`

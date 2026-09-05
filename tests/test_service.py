@@ -88,12 +88,13 @@ def test_invalid_requests_do_not_reach_twilio(service, path, payload):
     ("/sms/send", {"message": "Check in"}, "create"),
     ("/sms/inbox", {"after": "2026-09-05T12:00:00Z"}, "list"),
 ])
-def test_provider_failure_is_a_502_without_sensitive_details(service, failure, path, payload, operation):
+def test_provider_failure_is_a_502_without_sensitive_details(service, failure, path, payload, operation, caplog):
     app, provider = service
     getattr(provider.messages, operation).side_effect = failure
     response = app.test_client().post(path, json=payload)
     assert response.status_code == 502
     assert response.json == {"error": "SMS provider unavailable"}
+    assert "private" not in caplog.text
 
 
 def test_health_and_removed_auth_routes(service):
@@ -102,3 +103,17 @@ def test_health_and_removed_auth_routes(service):
     assert client.get("/health").json == {"status": "healthy"}
     assert client.post("/auth/challenge", json={"hostname": "old"}).status_code == 404
     assert client.post("/auth/verify", json={}).status_code == 404
+
+
+@pytest.mark.parametrize("name", ["TWILIO_PHONE_NUMBER", "YOUR_PHONE_NUMBER"])
+@pytest.mark.parametrize("value", [
+    "15557654321", "+1 555 765 4321", "+15557654321 ",
+    "+05557654321", "+1234567890123456", "+1５５５７６５４３２１",
+])
+def test_startup_rejects_noncanonical_phone_credentials(service, monkeypatch, name, value):
+    from sms_notifier import create_app
+
+    monkeypatch.setenv(name, value)
+    with pytest.raises(ValueError, match=f"{name} must use E.164 format") as error:
+        create_app()
+    assert value not in str(error.value)
