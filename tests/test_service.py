@@ -4,8 +4,8 @@ from unittest.mock import Mock
 import json
 
 import pytest
-from requests import ConnectionError
-from twilio.base.exceptions import TwilioRestException
+from requests import ConnectionError, HTTPError, Response
+from twilio.base.exceptions import TwilioException, TwilioRestException
 
 
 @pytest.fixture
@@ -82,6 +82,7 @@ def test_invalid_requests_do_not_reach_twilio(service, path, payload):
 
 @pytest.mark.parametrize("failure", [
     TwilioRestException(503, "https://api.twilio.com", msg="private provider details"),
+    TwilioException("private unknown SDK details"),
     ConnectionError("private transport details"),
 ])
 @pytest.mark.parametrize("path,payload,operation", [
@@ -94,6 +95,21 @@ def test_provider_failure_is_a_502_without_sensitive_details(service, failure, p
     response = app.test_client().post(path, json=payload)
     assert response.status_code == 502
     assert response.json == {"error": "SMS provider unavailable"}
+    assert "private" not in caplog.text
+
+
+def test_http_error_preserves_response_status_and_code(service, caplog):
+    app, provider = service
+    response = Response()
+    response.status_code = 403
+    response._content = b'{"code": 20003, "message": "private provider details"}'
+    provider.messages.list.side_effect = HTTPError("private request details", response=response)
+
+    result = app.test_client().post("/sms/inbox", json={"after": "2026-09-05T00:00:00Z"})
+
+    assert result.status_code == 502
+    assert result.json == {"error": "SMS provider unavailable"}
+    assert "HTTPError status=403 code=20003" in caplog.text
     assert "private" not in caplog.text
 
 

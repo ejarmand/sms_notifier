@@ -21,9 +21,11 @@ Twilio's SDK list call follows pagination. The server keeps no message state.
 Unknown request fields, including old auth fields and recipient overrides,
 return 400. Provider HTTP or connection failures return 502. Do not blindly
 retry an unsuccessful send: a timeout can occur after Twilio accepted it.
-Provider failures log the exception type and available HTTP status/Twilio code,
-without provider error text. Twilio SDK INFO request logging is suppressed to
-keep phone-number query parameters out of the journal.
+Provider failures log the exception type, operation, and available HTTP status
+and Twilio code, including responses attached to SDK pagination exceptions.
+Known SDK reasons such as `Unable to fetch page` are retained. Provider error
+text and response bodies are excluded. Twilio SDK INFO request logging is
+suppressed to keep phone-number query parameters out of the journal.
 
 ## Client
 

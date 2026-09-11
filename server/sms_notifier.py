@@ -1,5 +1,6 @@
 """Private SMS API. Network access is authorized by Tailscale policy."""
 
+import json
 import logging
 import os
 import re
@@ -9,9 +10,41 @@ from flask import Flask, jsonify, request
 from requests import RequestException
 from twilio.base.exceptions import TwilioException
 from twilio.http.http_client import TwilioHttpClient
+from twilio.http.response import Response as TwilioResponse
 from twilio.rest import Client
 
 from src.config import get_secret
+
+
+def _provider_error_details(error):
+    """Extract diagnostic fields without logging provider text or request data."""
+    status = getattr(error, "status", None)
+    code = getattr(error, "code", None)
+    response = getattr(error, "response", None)
+    reason = None
+    if isinstance(error, TwilioException):
+        # Pagination errors carry the response in args, unlike TwilioRestException.
+        response = next((arg for arg in error.args if isinstance(arg, TwilioResponse)), response)
+        if error.args and error.args[0] in (
+            "Unable to fetch page", "Page Records can not be deserialized",
+        ):
+            reason = error.args[0]
+    if response is not None:
+        if status is None:
+            status = response.status_code
+        if code is None:
+            try:
+                payload = json.loads(response.text)
+            except (ValueError, TypeError):
+                payload = None
+            if isinstance(payload, dict):
+                code = payload.get("code")
+    # Never interpolate arbitrary response values into the journal.
+    return (
+        status if type(status) is int else None,
+        code if type(code) is int else None,
+        reason,
+    )
 
 
 def create_app():
@@ -41,9 +74,10 @@ def create_app():
     @app.errorhandler(TwilioException)
     @app.errorhandler(RequestException)
     def provider_error(error):
+        status, code, reason = _provider_error_details(error)
         app.logger.error(
-            "SMS provider request failed: %s status=%s code=%s",
-            type(error).__name__, getattr(error, "status", None), getattr(error, "code", None),
+            "SMS provider request failed: %s status=%s code=%s operation=%s reason=%s",
+            type(error).__name__, status, code, request.endpoint, reason,
         )
         return jsonify({"error": "SMS provider unavailable"}), 502
 
