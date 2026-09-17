@@ -12,6 +12,11 @@ with SMSClient("http://100.64.10.20:5000") as client:
     replies = client.inbox(datetime.now(timezone.utc) - timedelta(minutes=15))
 ```
 
+`ring()` submits one phone ring alarm through `POST /voice/ring` with `{}` and
+returns `status` and `call_id`. The server uses its SMS credentials and numbers.
+It accepts no call options. Requires a server revision with the voice endpoint;
+older servers return 404. Ring requests never follow redirects or retry.
+
 `send(message)` returns a dictionary with `status` and `message_id`.
 `inbox(after)` takes an aware
 `datetime` and returns `sid`, `date_sent`, `from`, and `body` for personal replies.

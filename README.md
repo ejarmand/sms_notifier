@@ -1,7 +1,7 @@
 # SMS Notifier
 
 A private HTTP service for life_tracker to send SMS through Twilio and read
-replies. Access is controlled by Tailscale network policy. There are no
+replies, and place phone ring alarms. Access is controlled by Tailscale network policy. There are no
 application keys, auth endpoints, challenge database, or public HTTP listener.
 
 ## API
@@ -10,6 +10,7 @@ application keys, auth endpoints, challenge database, or public HTTP listener.
 | --- | --- |
 | `GET /health` | `{"status": "healthy"}`; does not contact Twilio |
 | `POST /sms/send` with `{"message": "Check in"}` | `{"status": "success", "message_id": "SM..."}` |
+| `POST /voice/ring` with `{}` | `{"status": "success", "call_id": "CA..."}` |
 | `POST /sms/inbox` with `{"after": "2026-09-05T12:00:00Z"}` | `[{"sid": "SM...", "date_sent": "...", "from": "+1...", "body": "..."}]` |
 
 Send always targets `YOUR_PHONE_NUMBER` from `TWILIO_PHONE_NUMBER`. Messages
@@ -18,9 +19,18 @@ inbound messages from `YOUR_PHONE_NUMBER` to `TWILIO_PHONE_NUMBER`. Its cursor
 must include a timezone; it is normalized to UTC before querying Twilio.
 Twilio's SDK list call follows pagination. The server keeps no message state.
 
+Ring alarms use the same Twilio account and `TWILIO_PHONE_NUMBER` →
+`YOUR_PHONE_NUMBER` pair as SMS. The server submits one call with inline
+`<Response><Hangup/></Response>` and no custom ringing timeout. It hangs up on
+pickup, including voicemail. The endpoint accepts only an empty JSON object;
+callers cannot override numbers, TwiML, or timeout. It sends no SMS itself.
+The caller owns scheduling, deadlines, durable attempt claims and SMS delivery.
+There is no automatic retry or server-side deduplication. A successful response
+means Twilio accepted the call, not that the phone rang or a person heard it.
+
 Unknown request fields, including old auth fields and recipient overrides,
 return 400. Provider HTTP or connection failures return 502. Do not blindly
-retry an unsuccessful send: a timeout can occur after Twilio accepted it.
+retry an unsuccessful SMS or call: a timeout can occur after Twilio accepted it.
 Provider failures log the exception type, operation, and available HTTP status
 and Twilio code, including responses attached to SDK pagination exceptions.
 Known SDK reasons such as `Unable to fetch page` are retained. Provider error
@@ -35,6 +45,8 @@ from sms_client import SMSClient
 
 with SMSClient("http://100.64.10.20:5000") as client:
     client.send("What are you working on?")
+    # Only on an explicit call request; this places a real call.
+    call = client.ring()
     replies = client.inbox(datetime.now(timezone.utc) - timedelta(minutes=15))
 ```
 
@@ -95,3 +107,22 @@ not send real SMS. There is no fake-success mode in the deployed service.
 ## License
 
 MIT
+
+## Upgrade for phone ring alarms
+
+Install this revision on the existing SMS host using `sudo sh deploy/install.sh`.
+It preserves `/etc/sms-notifier/server.conf` and the four existing credential
+files, rebuilds the installed environment, and restarts the service. Environment
+based deployments reuse the same four existing variables too. No voice-specific
+credentials, public webhook, or extra port are needed. The existing Twilio number
+must support Voice and the account must permit calls to the configured recipient.
+
+Deploy the server before upgrading life_tracker. An old server returns 404 for
+`POST /voice/ring`; the caller must retain the failed/uncertain attempt rather
+than retry it. `GET /health` checks service availability only, not voice support.
+Check `sudo journalctl -u sms-notifier` for errors tagged `Voice provider request
+failed` and Twilio's logs for the returned CallSid. Only place a live test call
+when explicitly requested.
+
+References: [Calls API](https://www.twilio.com/docs/voice/api/call-resource),
+[Hangup](https://www.twilio.com/docs/voice/twiml/hangup).
