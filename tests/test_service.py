@@ -38,6 +38,43 @@ def test_send_without_application_credentials(service):
     )
 
 
+def test_ring_uses_sms_credentials_and_normal_ringing(service):
+    app, provider = service
+    provider.calls.create.return_value.sid = 'CA' + 'a' * 32
+    response = app.test_client().post('/voice/ring', json={})
+    assert response.status_code == 200
+    assert response.json == {'status': 'success', 'call_id': 'CA' + 'a' * 32}
+    provider.calls.create.assert_called_once_with(
+        from_='+15551234567', to='+15557654321', twiml='<Response><Hangup/></Response>'
+    )
+    provider.messages.create.assert_not_called()
+
+
+@pytest.mark.parametrize('payload', [None, [], {'to': '+15550000000'},
+                                    {'from': '+15550000000'}, {'twiml': '<Response/>'},
+                                    {'timeout': 5}, {'message': 'Speak this'}])
+def test_ring_rejects_caller_controlled_options(service, payload):
+    app, provider = service
+    response = app.test_client().post('/voice/ring', data=json.dumps(payload), content_type='application/json')
+    assert response.status_code == 400
+    provider.calls.create.assert_not_called()
+
+
+@pytest.mark.parametrize('failure', [
+    TwilioRestException(403, 'https://api.twilio.com', msg='private details', code=21215),
+    ConnectionError('private transport details'),
+])
+def test_ring_failure_is_private_and_never_retried(service, failure, caplog):
+    app, provider = service
+    provider.calls.create.side_effect = failure
+    response = app.test_client().post('/voice/ring', json={})
+    assert response.status_code == 502
+    assert response.json == {'error': 'Voice provider unavailable'}
+    assert provider.calls.create.call_count == 1
+    assert 'Voice provider request failed' in caplog.text
+    assert 'private' not in caplog.text
+
+
 def test_inbox_reads_only_personal_replies_with_a_utc_cursor(service):
     app, provider = service
     when = datetime(2026, 9, 5, 19, 1, tzinfo=timezone.utc)

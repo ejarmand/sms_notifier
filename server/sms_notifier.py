@@ -75,11 +75,12 @@ def create_app():
     @app.errorhandler(RequestException)
     def provider_error(error):
         status, code, reason = _provider_error_details(error)
+        channel = 'Voice' if request.endpoint == 'ring' else 'SMS'
         app.logger.error(
-            "SMS provider request failed: %s status=%s code=%s operation=%s reason=%s",
-            type(error).__name__, status, code, request.endpoint, reason,
+            "%s provider request failed: %s status=%s code=%s operation=%s reason=%s",
+            channel, type(error).__name__, status, code, request.endpoint, reason,
         )
-        return jsonify({"error": "SMS provider unavailable"}), 502
+        return jsonify({"error": f"{channel} provider unavailable"}), 502
 
     @app.get("/health")
     def health():
@@ -95,6 +96,15 @@ def create_app():
             return jsonify({"error": "message must be a nonempty string of at most 1600 characters"}), 400
         sent = twilio.messages.create(body=data["message"], from_=sender, to=recipient)
         return jsonify({"status": "success", "message_id": sent.sid})
+
+    @app.post('/voice/ring')
+    def ring():
+        if request.get_json(silent=True) != {}:
+            return jsonify({'error': 'Expected an empty JSON object'}), 400
+        call = twilio.calls.create(
+            from_=sender, to=recipient, twiml='<Response><Hangup/></Response>'
+        )
+        return jsonify({'status': 'success', 'call_id': call.sid})
 
     @app.post("/sms/inbox")
     def inbox():

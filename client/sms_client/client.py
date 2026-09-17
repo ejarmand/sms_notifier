@@ -31,6 +31,17 @@ class SMSClient:
         response.raise_for_status()
         return response.json()
 
+    def ring(self) -> dict[str, Any]:
+        """Attempt one call to the server's configured recipient; never retry or redirect."""
+        response = self._session.post(
+            f"{self.server_url}/voice/ring", json={}, timeout=self.timeout,
+            allow_redirects=False,
+        )
+        response.raise_for_status()
+        if response.is_redirect:
+            raise requests.HTTPError('Voice endpoint redirected; call not retried', response=response)
+        return response.json()
+
     def inbox(self, after: datetime) -> list[dict[str, Any]]:
         """Read replies after an aware timestamp, deduplicating SIDs in memory."""
         if after.tzinfo is None or after.utcoffset() is None:
